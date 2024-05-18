@@ -10,3 +10,5 @@ int main() {
     printf("Buffer position: %d\n", buffer_position);  // Kontrollera att positionen är nollställd
     return 0;
 }
+
+//jag gillar inte gifs det är en fasad
