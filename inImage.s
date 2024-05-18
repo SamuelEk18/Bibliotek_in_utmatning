@@ -1,9 +1,24 @@
+# Nytt test under:
+# Fgets har parametrar (buffert, antal, fil)
+# stdin -> Tangentbordet
+
+.data 
+buffer:
+    .space 1024 # Reservera plats för inmatningsbufferten (1024 bytes, kan väl ändra om man vill??)
+buffer_pointer:
+    .byte 0
+
 .text
-.global MaxOfThree
-MaxOfThree:
-cmpl %esi, %edi #jämför argument 1 och 2
-cmovl %esi, %edi #flytta %esi-värdet till %edi om det var större
-cmpl %edx, %edi #jämför med argument 3
-cmovl %edx, %edi #flytta %edx-värdet till %edi om det var större
-movl %edi, %eax #lägg returvärdet i %eax
-ret
+.global inImage 
+inImage:
+    movq $buffer, %rdi
+    movq $5, %rsi
+    movq stdin, %rdx
+    call fgets
+
+    # Nollställa buffer_pointer
+    movb $0, buffer_pointer
+
+    ret
+
+
