@@ -16,9 +16,9 @@ int main(){
     // Lägger inledande text i utmatningsbuffer, 
     // samt skickar innehåll från utmatningsbuffer till terminal.
     // Hämtar sedan text från terminalinmatning.
-    putText(headMsg);   
-    outImage();         
-    inImage();      
+    putText(headMsg);
+    outImage();
+    inImage();
 
     // Loop som hämtar 5 tal från inmatningsbuffert, 
     // samt placerar uträkning med dessa tal att presentera i utmatningsbufferten.
@@ -48,16 +48,16 @@ int main(){
     // och lägger de lästa tecknen i utbufferten.
     // Lägger även till ett nyradstecken och talet 125 i utbufferten,
     // och skriver sedan ut alltihopa i terminalen.
-    getText(buf, 12); 
+    getText(buf, 12);
     putText(buf);
 //    putChar('\n');
-    putInt(125);    
-    outImage(); 
+    putInt(125);
+    outImage();
 
     // Lägger till sist avslutningstext i utmatningsbufferten,
     // och visar texten i terminalen.
-    putText(endMsg); 
-    outImage();  
+    putText(endMsg);
+    outImage();
 
     return 0;
 }

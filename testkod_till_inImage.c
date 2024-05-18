@@ -3,7 +3,7 @@
 extern void inImage(char *buffer);
 
 int main() {
-    char buffer[1024];
+    char buffer[64];
 
     // Anropa inImage för att läsa in en rad från tangentbordet
     inImage(buffer);

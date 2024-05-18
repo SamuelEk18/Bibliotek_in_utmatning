@@ -20,8 +20,8 @@ inImage:
     movq %rsp, %rbp # lägg registerna på stacken
 
     movq $in_buffer, %rdi # buffer address
-    movq $1024, %rsi # buffer strl
-    movq $0, %rdx # stdin
+    movl $1024, %esi # buffer strl
+    movq $stdin, %rdx # stdin
 
     call fgets
 
@@ -33,7 +33,8 @@ inImage:
     popq %rbp
     ret
 
-.global outImage:
+.global outImage
+outImage:
     pushq %rbp # pushar register ägda av den caller
     movq %rsp, %rbp # lägg registerna på stacken
 
@@ -59,11 +60,11 @@ putText:
 
 loop_in_putText:
     movb (%rsi), %al # läser en byte från text
-    movb %al, out_buffer(%rdi) # kopiera byten till buffern
+    movb %al, (%rdi) # kopiera byten till buffern
     incq %rdi # öka addressen
     incq %rsi # ökar till nästa byte i texten
     cmpb $0, %al # kolla om vi nått slutet av filen/texten
-    jne putText_loop # om inte loopa
+    jne loop_in_putText # om inte loopa
 
     movq %rdi, out_buffer_pos  # om vi nått uppdatera addressen
 
