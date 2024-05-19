@@ -305,3 +305,10 @@ _outpos_lower:
 _outpos_higher:
     movq $63, out_buffer_pos(%rip) # Sätt out_buffer_pos till 63
     ret
+
+
+
+
+
+
+
