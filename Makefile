@@ -1,3 +1,4 @@
+# Test
 # Filnamn på ditt I/O-bibliotek (ändra namn om du vill)
 LIB_FILE=lab3_lib.s
 
