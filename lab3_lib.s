@@ -1,290 +1,307 @@
-.section .data
+.data
 in_buffer:
     .space 64 # Reservera buffern
+
 in_buffer_pos:
     .quad 0
 
 out_buffer:
     .space 64 # Reservera buffern
+
 out_buffer_pos:
     .quad 0
 
 utstring:
     .asciz "%s\n"
 
-.section .text
+
 .global inImage,getInt,getText,getChar,getInPos,setInPos,outImage,putInt,putText,putChar,getOutPos,setOutPos
-
+.text
 inImage:
-    leaq in_buffer(%rip), %rdi # Ladda adressen för buffern
-
-    movl $64, %esi # Sätt buffert strl
-    movq stdin(%rip), %rdx # Ladda in stdin
-
+    movq $in_buffer, %rdi # Ladda adressen för buffern
+    movl $64, %esi # läs
+    movq stdin, %rdx # Ladda in stdin
     call fgets
-
-    movq $0, in_buffer_pos(%rip) # Återställ buffert positionen
-    jmp _inImageProcess # Fortsätt processen
-
-_inImageProcess:
-    leaq in_buffer(%rip), %rax # Ladda in i rax som håller värdet vid ret
-
-    movq in_buffer_pos(%rip), %r12 # Ladda in värde i register
-    movq (%rax, %r12), %rdi # Ladda in nuvarande karaktär
-    testq %rdi, %rdi # Kolla om o
-    je _inImageEnd # Om 0 avsluta
-
-    incq %r12 # Öka buffert positionen
-    movq %r12, in_buffer_pos(%rip) # Uppdatera i buffern
+    leaq in_buffer_pos(%rip), %rdi
+    movq $0, (%rdi)
     ret
 
-_inImageEnd:
-    call inImage # Fyll på buffern
-    jmp _inImageProcess # Fortsätt hantera
-
 getInt:
-    pushq %rbp # Spara basen
-    movq %rsp, %rbp # Sätter staket och basen på samma
+    pushq %rbp                  # Spara baspekaren
+    movq %rsp, %rbp             # Sätt baspekaren
 
-    leaq in_buffer(%rip), %rax # Ladda in buffern
-    movq in_buffer_pos(%rip), %r12 # Lägg i register
-    addq %r12, %rax # Justera buffert adressen med nuvarande position
+    call checkBuffer            # Kolla och fyll bufferten om nödvändigt
 
-    movq $0, %rdi # Initialisera resultatet
-    movq $0, %r13 # Tecken flagga (0 för positivt, 1 för negativt)
+    leaq in_buffer(%rip), %rax  # Ladda in buffern
+    movq in_buffer_pos(%rip), %r12 # Ladda aktuell position
+    addq %r12, %rax             # Justera buffertadressen med aktuell position
+
+    movq $0, %rdi               # Initialisera resultatet
+    movq $0, %r13               # Teckenflagga (0 för positivt, 1 för negativt)
 
 _white_space:
-    movzbq (%rax), %r14 # Ladda aktuell karaktär
-    movb %r14b, %al # Flytta från %r14 till %al
-
-    cmpb $0, %al # Kolla om slutet på bufferten
+    movzbq (%rax), %r14         # Ladda aktuell karaktär
+    cmpb $0, %r14b              # Kolla om slutet på bufferten
     je _to_inImage
-
-    cmpb $'\n', %al # Kolla om ny rad
+    cmpb $'\n', %r14b           # Kolla om ny rad
     je _to_inImage
-
-    cmpb $' ', %al # Kolla om mellanslag
+    cmpb $' ', %r14b            # Kolla om mellanslag
     je _next_int
-
-    cmpb $'\t', %al # Kolla om tab
+    cmpb $'\t', %r14b           # Kolla om tab
     je _next_int
-
-    jmp _check_neg
+    jmp _check_sign
 
 _next_int:
-    incq %rax # Flytta till nästa karaktär
-    incq %r12 # Uppdatera buffert positionen
+    incq %rax                   # Flytta till nästa karaktär
+    incq %r12                   # Uppdatera buffertpositionen
     jmp _white_space
 
-_check_neg:
-    cmpb $'-', %al # Kolla om negativt tecken
-    jne _check_num
+_check_sign:
+    cmpb $'-', %r14b            # Kolla om negativt tecken
+    je _set_negative
+    cmpb $'+', %r14b            # Kolla om positivt tecken
+    je _next_sign
+    jmp _check_num
 
-    movq $1, %r13 # Sätt tecken flaggan till negativt
-    incq %rax # Flytta till nästa karaktär
-    incq %r12 # Uppdatera buffert positionen
+_set_negative:
+    movq $1, %r13               # Sätt teckenflaggan till negativt
 
+_next_sign:
+    incq %rax                   # Flytta till nästa karaktär
+    incq %r12                   # Uppdatera buffertpositionen
     jmp _check_num
 
 _check_num:
-    movzbq (%rax), %r15 # Ladda aktuell karaktär till %r15
-    movb %r15b, %al # Flytta byte-storleken värdet från %r15 till %al
-
-    cmpb $'0', %al # Kolla om det är en siffra
+    movzbq (%rax), %r15         # Ladda aktuell karaktär
+    cmpb $'0', %r15b            # Kolla om det är en siffra
     jb _end_int
-
-    cmpb $'9', %al
+    cmpb $'9', %r15b
     ja _end_int
 
-    subb $'0', %al # Konvertera ASCII till numeriskt värde
-    imulq $10, %rdi # Multiplicera aktuellt resultat med 10
-    addq %rdi, %rax # Lägg till ny siffra till resultatet
+    subb $'0', %r15b            # Konvertera ASCII till numeriskt värde
+    imulq $10, %rdi             # Multiplicera aktuellt resultat med 10
+    addq %r15, %rdi             # Lägg till ny siffra till resultatet
 
-    incq %rax # Flytta till nästa karaktär
-    incq %r12 # Uppdatera buffert positionen
+    incq %rax                   # Flytta till nästa karaktär
+    incq %r12                   # Uppdatera buffertpositionen
     jmp _check_num
 
 _end_int:
-    cmpq $1, %r13 # Kolla om talet är negativt
+    cmpq $1, %r13               # Kolla om talet är negativt
     jne _store_int
-    negq %rdi # Applicera negativt tecken om det behövs
+    negq %rdi                   # Applicera negativt tecken om det behövs
 
 _store_int:
-    movq %r12, in_buffer_pos(%rip) # Uppdatera buffert positionen
+    movq %r12, in_buffer_pos(%rip) # Uppdatera buffertpositionen
     movq %rbp, %rsp
     popq %rbp
     ret
 
 _to_inImage:
-    call inImage # Anropa inImage för att fylla på buffern
-    jmp getInt # Försök läsa om talet
+    call inImage                # Anropa inImage för att fylla på buffern
+    jmp getInt                  # Försök läsa om talet
 
 getText:
-    pushq %rbx # Spara %rbx
-    movq in_buffer_pos(%rip), %rcx  # Ladda aktuell buffert position
-    leaq in_buffer(%rip), %rax  # Ladda buffert adressen
-    movq $0, %rbx # Initialisera räknare för karaktärer
+    pushq %rbp                 # Spara baspekaren
+    movq %rsp, %rbp            # Sätt baspekaren
+    pushq %rbx                 # Spara %rbx
+    pushq %rsi                 # Spara %rsi
+    pushq %rdi                 # Spara %rdi
+
+    movq %rdi, %rbx            # Spara buf (första parameter) i %rbx
+    movq %rsi, %rdi            # Spara n (andra parameter) i %rdi
+    movq $0, %rax              # Initialisera räknare för antal tecken
+    call checkBuffer           # Kontrollera och fyll på bufferten om nödvändigt
+
+    movq in_buffer_pos(%rip), %rcx  # Ladda aktuell buffertposition
+    leaq in_buffer(%rip), %rdx      # Ladda buffertadress
 
 _getText_loop:
-    cmpq $0, %rsi # Kolla om läst tillräckligt med karaktärer
-    je _return_GetText # Om ja, avsluta
+    cmpq %rdi, %rax            # Har vi läst tillräckligt med tecken?
+    je _return_GetText         # Om ja, avsluta
 
-    movzbq (%rax, %rcx), %rdx   # Ladda en byte från indatabuffern
-    movb %dl, (%rdi) # Kopiera till målbuffern
-    incq %rcx # Nästa byte i indatabuffern
-    movq %rdx, %rbx # Spara karaktär för att kolla nollavslutare
+    movzbq (%rdx, %rcx), %r8   # Ladda en byte från inmatningsbufferten
+    cmpb $0, %r8b              # Kolla om slutet på strängen
+    je _return_GetText         # Om ja, avsluta
 
-    cmpb $0, %dl # Kolla om slutet på strängen
-    je _return_GetText # Om ja, avsluta
+    movb %r8b, (%rbx, %rax)    # Kopiera byte till målbuffern
+    incq %rax                  # Öka räknaren för antal tecken
+    incq %rcx                  # Nästa byte i inmatningsbufferten
 
-    decq %rsi # Minska räknaren
-    incq %rdi # Nästa byte i målbuffern
-    jmp _getText_loop # Fortsätt loopen
+    call checkBuffer           # Kontrollera och fyll på bufferten om nödvändigt
+
+    jmp _getText_loop          # Fortsätt loopen
 
 _return_GetText:
-    movq %rcx, in_buffer_pos(%rip) # Uppdatera buffert positionen
-    movq %rbx, %rax # Returnera antalet lästa karaktärer
-    popq %rbx # Återställ %rbx
+    movb $0, (%rbx, %rax)      # NULL-terminera strängen
+    movq %rax, %rdi            # Spara antalet överförda tecken i %rdi
+    movq %rcx, in_buffer_pos(%rip) # Uppdatera buffertpositionen
+
+    popq %rdi                  # Återställ %rdi
+    popq %rsi                  # Återställ %rsi
+    popq %rbx                  # Återställ %rbx
+    movq %rdi, %rax            # Returnera antalet överförda tecken
+    popq %rbp                  # Återställ baspekaren
     ret
 
+checkBuffer:
+    leaq in_buffer(%rip), %r9  # Ladda buffertadressen
+    movq in_buffer_pos(%rip), %r10 # Ladda aktuell position
+    addq %r10, %r9             # Justera adressen med positionen
+    movzbq (%r9), %r11         # Ladda aktuell karaktär
+    cmpb $0, %r11b             # Kolla om bufferten är slut
+    je _call_inImage
+    ret
+
+_call_inImage:
+    call inImage               # Anropa inImage
+    ret
+
+
 getChar:
-    pushq %rbp # Bevara basen
-    movq %rsp, %rbp # Ställ in basen för sp
+    pushq %rbp                    # Spara baspekaren
+    movq %rsp, %rbp               # Sätt baspekaren
 
 _getChar_loop:
-    movq in_buffer_pos, %rax  # Ladda buffert pekaren
-    leaq in_buffer, %rdx # Ladda buffertens basadress
-    movzbl (%rdx, %rax), %ecx    # Ladda aktuell karaktär till %ecx
-    testb %cl, %cl # Kolla om karaktären är noll
-    jz _to_getChar # Om det är noll, fyll på buffern
+    movq in_buffer_pos(%rip), %rax # Ladda buffertpositionen
+    leaq in_buffer(%rip), %rdx    # Ladda buffertens basadress
+    movzbl (%rdx, %rax), %ecx     # Ladda aktuell karaktär till %ecx
 
-    incq %rax # Flytta till nästa karaktär
-    movq %rax, in_buffer_pos # Uppdatera buffert pekaren
-    popq %rbp # Återställ basen
+    cmpb $0, %cl                  # Kontrollera om karaktären är noll
+    je _to_getChar                # Om det är noll, fyll på bufferten
+
+    incq %rax                     # Flytta till nästa karaktär
+    movq %rax, in_buffer_pos(%rip) # Uppdatera buffertpositionen
+
+    movzbl %cl, %eax              # Flytta tecknet till %eax (returvärde)
+    popq %rbp                     # Återställ baspekaren
     ret
 
 _to_getChar:
-    call inImage # Fyll på buffern
-    jmp _getChar_loop # Hoppa tillbaka till loopen
+    call inImage                  # Fyll på bufferten
+    jmp _getChar_loop             # Hoppa tillbaka till loopen
 
 getInPos:
-    movq in_buffer_pos, %rax
+    movq in_buffer_pos(%rip), %rax
     ret
 
 setInPos:
-    cmpq $0, %rdi # Jämför indata värdet med 0
-    jle _inpos_lower# Om mindre än eller lika med 0, hoppa
+    cmpq $0, %rdi                 # Jämför indata värdet med 0
+    jl _inpos_set_to_zero         # Om mindre än 0, hoppa
 
-    cmpq $63, %rdi # Jämför indata värdet med 63
-    jge _inpos_higher # Om större än eller lika med 63, hoppa
+    cmpq $63, %rdi                # Jämför indata värdet med 63 (MAXPOS)
+    jg _inpos_set_to_max          # Om större än 63, hoppa
 
-    movq %rdi, in_buffer_pos   # Sätt in_buffer_pos till indata värdet
+    movq %rdi, in_buffer_pos(%rip) # Sätt in_buffer_pos till indata värdet
     ret
 
-_inpos_lower:
-    movq $0, in_buffer_pos     # Sätt in_buffer_pos till 0
-    ret
+_inpos_set_to_zero:
+    movq $0, %rdi                 # Sätt indata värdet till 0
+    jmp _set_in_buffer_pos        # Gå till inställningen av buffertpositionen
 
-_inpos_higher:
-    movq $63, in_buffer_pos    # Sätt in_buffer_pos till 63
+_inpos_set_to_max:
+    movq $63, %rdi                # Sätt indata värdet till 63 (MAXPOS)
+    jmp _set_in_buffer_pos        # Gå till inställningen av buffertpositionen
+
+_set_in_buffer_pos:
+    movq %rdi, in_buffer_pos(%rip) # Sätt in_buffer_pos till värdet i %rdi
     ret
 
 outImage:
-    movq $out_buffer, %rsi    # Ladda buffert adressen
-    movq $utstring, %rdi  # Ladda format sträng adressen
-    xor %rax, %rax # Rensa eventuella tidigare värden i %rax
-    call printf # Anropa printf för att skriva ut strängen
-
-    movq $0, out_buffer_pos    # Återställ buffert positionen
+    leaq out_buffer, %rdi     # Ladda adressen till formatsträngen i %rdi
+    call puts                   # Anropa printf för att skriva ut strängen
+    movq $0, %rdi # Återställ buffertpositionen
+    movq $rdi, out_buffer_pos # Återställ buffertpositionen
     ret
 
 putInt:
-    pushq $0 # 0 för att justera stacken och använda som avgränsare
-    movq $10, %rcx # Sätt divisor till 10
-    cmpq $0, %rdi # Jämför indatat heltal med 0
-    jl _handle_neg_putint # Om negativt, hoppa för att hantera negativa nummer
+    pushq %rbp                 # Spara baspekaren
+    movq %rsp, %rbp            # Ställ in baspekaren
+    subq $32, %rsp             # Allokera stackutrymme för temporära data
 
-_putint_negativ_ret:
-    movq %rdi, %rax # Flytta heltal till %rax
+    movq %rdi, -8(%rbp)        # Spara talet n i stacken
+
+    movq $10, %rcx             # Sätt divisor till 10
+    cmpq $0, %rdi              # Jämför indatat heltal med 0
+    jge _putint_convert        # Om n >= 0, hoppa till konvertering
+    negq %rdi                  # Gör n positivt
+    movq $'-', %rsi            # Ladda '-' tecken
+    call putChar               # Skriv ut '-' tecken
+
+_putint_convert:
+    movq -8(%rbp), %rax        # Flytta talet n till %rax
+    leaq -8(%rbp), %rbx        # Pekare till stack för att lagra siffrorna
+    addq $24, %rbx             # Flytta pekaren till slutet av det allokerade utrymmet
 
 _putint_loop:
-    cqto # Teckens-förläng %rax till %rdx
-    divq %rcx # Dividera %rax med 10, kvot i %rax, rest i %rdx
-    addq $'0', %rdx # Konvertera resten till ASCII
+    cqto                       # Teckens-förläng %rax till %rdx
+    idivq %rcx                 # Dividera %rax med 10, kvot i %rax, rest i %rdx
+    addq $'0', %rdx            # Konvertera resten till ASCII
+    decq %rbx                  # Flytta stackpekaren bakåt
+    movb %dl, (%rbx)           # Spara resten på stacken
+    testq %rax, %rax           # Kontrollera om kvoten är noll
+    jnz _putint_loop           # Om inte noll, fortsätt loopen
 
-    pushq %rdx
+_putint_output:
+    cmpq %rbx, %rbp            # Jämför stackpekaren med baspekaren
+    je _putint_end             # Om de är lika, avsluta
 
-    cmpq $0, %rax # Kontrollera om kvoten är noll
-    je _putint_buffer # Om noll, hoppa
-    jmp _putint_loop # Annars, fortsätt loopen
+    movzbl (%rbx), %edi        # Ladda en siffra från stacken
+    call putChar               # Skriv ut siffran
+    incq %rbx                  # Flytta stackpekaren framåt
+    jmp _putint_output         # Upprepa tills alla siffror är skrivna
 
-_handle_neg_putint:
-    pushq %rdi # push ursprungligt heltal på stacken
+_putint_end:
+    leave                      # Återställ stacken och baspekaren
+    ret                        # Återvänd från rutinen
 
-    movq $'-', %rdi  # Ladda '-' till %rdi
-    call putChar# Anropa putChar för att skriva ut '-'
-
-    popq %rdi # Återställ ursprungligt heltal
-    negq %rdi # Negativt heltal
-    jmp _putint_negativ_ret # Hoppa tillbaka för att fortsätta konverteringen
-
-_putint_buffer:
-    popq %rdi # Poppa en siffra från stacken
-    cmpq $0, %rdi # Kontrollera om det är initiala 0
-    je _end_putint # Om ja, avsluta
-
-    call putChar # Annars, anropa putChar för att skriva ut siffran
-
-    jmp _putint_buffer # Upprepa tills alla siffror är skrivna
-
-_end_putint:
-    ret
 
 putText:
-    pushq %rbx # Spara %rbx
-    movq out_buffer_pos(%rip), %rax # Ladda aktuell buffert pekare
-    leaq out_buffer(%rip), %rdx  # Ladda basadressen för out_buffer
-    movq $0, %rbx # Initialisera indexregistret
+    pushq %rbx                      # Spara %rbx
+    movq out_buffer_pos(%rip), %rax # Ladda aktuell buffertpekare
+    leaq out_buffer(%rip), %rdx     # Ladda basadressen för out_buffer
+    movq $0, %rbx                   # Initialisera indexregistret
 
 _loop_in_putText:
-    movzbq (%rdi, %rbx), %rcx   # Ladda byte från indatat strängen till %rcx
-    movb %cl, (%rdx, %rax)      # Kopiera byte till utdatat buffern
-    cmpb $0, %cl # Kontrollera om slutet på strängen
-    je _end_puttext # Om slutet på strängen, hoppa till done
+    movzbq (%rdi, %rbx), %rcx       # Ladda byte från indatasträngen till %rcx
+    cmpb $0, %cl                    # Kontrollera om slutet på strängen
+    je _end_puttext                 # Om slutet på strängen, hoppa till end
 
-    incq %rax # Öka buffert pekaren
-    incq %rbx # Öka indatat sträng pekaren
-    cmpq $64, %rax # Kontrollera om buffert pekaren överskrider buffert storleken
-    je _överflöd_puttext # Om överflöd, hoppa till overflow
-    jmp _loop_in_putText        # Upprepa loopen
+    movb %cl, (%rdx, %rax)          # Kopiera byte till utdata buffern
+    incq %rax                       # Öka buffertpekaren
+    incq %rbx                       # Öka indatasträngpekaren
+    cmpq $64, %rax                  # Kontrollera om buffertpekaren överskrider buffertstorleken
+    je _overflow_puttext            # Om överflöd, hoppa till overflow
+    jmp _loop_in_putText            # Upprepa loopen
 
-_överflöd_puttext:
-    call outImage  # Anropa outImage för att hantera buffert överskridning
-    movq $0, %rax # Återställ buffert pekaren till 0
-    jmp _loop_in_putText # Fortsätt bearbetningen av indata
+_overflow_puttext:
+    call outImage                   # Anropa outImage för att hantera buffertöverskridning
+    movq $0, %rax                   # Återställ buffertpekaren till 0
+    jmp _loop_in_putText            # Fortsätt bearbetningen av indata
 
 _end_puttext:
-    movq %rax, out_buffer_pos(%rip) # Uppdatera buffert pekaren
-    popq %rbx # Återställ %rbx
-    ret
+    movq %rax, out_buffer_pos(%rip) # Uppdatera buffertpekaren
+    popq %rbx                       # Återställ %rbx
+    ret                             # Återvänd från rutinen
+
 
 putChar:
-    movq out_buffer_pos(%rip), %rax  # Ladda aktuell buffert pekare
-    cmpq $64, %rax                 # Jämför med buffert storleken (64)
-    jge _överflöd_putchar              # Om överflöd, hoppa till hantering av överflöde
+    movq out_buffer_pos(%rip), %rax  # Ladda aktuell buffertpekare i %rax
+    cmpq $64, %rax                   # Jämför med buffertstorleken (64)
+    jge _overflow_putChar            # Om överflöd, hoppa till hantering av överflöde
 
-    leaq out_buffer(%rip), %rdx     # Ladda basadressen för out_buffer
-    movb %sil, (%rdx, %rax)        # Kopiera karaktär till buffert
-    incq %rax                      # Öka buffert pekaren
-    movq %rax, out_buffer_pos(%rip)  # Uppdatera buffert pekaren
-    jmp _end_putchar
+    leaq out_buffer(%rip), %rdx      # Ladda basadressen för out_buffer i %rdx
+    movb %sil, (%rdx, %rax)          # Kopiera tecknet (i %sil) till bufferten
+    incq %rax                        # Öka buffertpekaren med 1
+    movq %rax, out_buffer_pos(%rip)  # Uppdatera buffertpekaren med den nya positionen
+    jmp _end_putChar                 # Hoppa till slutet av rutinen
 
-_överflöd_putchar:
-    call outImage # Hantera överflödet
-    jmp putChar # Försök skriva karaktär efter hantering av överflöde
+_overflow_putChar:
+    call outImage                    # Anropa outImage för att tömma bufferten
+    jmp putChar                      # Försök skriva tecknet igen efter hantering av överflöde
 
-_end_putchar:
-    ret
+_end_putChar:
+    ret                              # Återvänd från rutinen
 
 getOutPos:
     movq out_buffer_pos, %rax   # Returnera aktuell position
