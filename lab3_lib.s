@@ -15,28 +15,28 @@ out_buffer_pos:
 .text
 
 inImage:
-    pushq %rdi    # Pushing %rdi (64-bit) onto the stack
-    pushq %rsi   # Pushing %esi (32-bit) onto the stack
-    pushq %rdx    # Pushing %rdx (64-bit) onto the stack
+    pushq %rdi
+    pushq %rsi
+    pushq %rdx
 
     movq $in_buffer, %rdi   # Loading the address of the buffer into %rdi
     movq $64, %rsi          # Setting the length to read
     movq stdin, %rdx        # Loading stdin
     call fgets              # Calling fgets to read input
-    
+
     leaq in_buffer_pos, %rdi  # Computing the effective address of in_buffer_pos
     movq $0, (%rdi)                 # Storing 0 at the computed address
 
-    popq %rdx     # Popping %rdx (64-bit) from the stack
-    popq %rsi    # Popping %esi (32-bit) from the stack
-    popq %rdi     # Popping %rdi (64-bit) from the stack
+    popq %rdx
+    popq %rsi
+    popq %rdi
     ret          # Return from the subroutine
 
 getInt:
     movq in_buffer_pos(%rip), %rsi
     leaq in_buffer(%rip), %rdi
     cmpq $63, %rsi
-    je _new_int
+    je _next_int
     jmp _white_space
 
 _white_space:
@@ -55,7 +55,7 @@ _check_sign:
     cmpb $'-', (%rdi, %rsi) # Kolla om negativt tecken
     je _set_negative
     cmpb $'+', (%rdi, %rsi)           # Kolla om positivt tecken
-    je _next_sign
+    je _end_int
     jmp _check_num
 
 _set_negative:
@@ -77,7 +77,7 @@ _check_num:
     addq %rcx, %rax             # Lägg till ny siffra till resultatet
     cmpq $63, %rsi
     je _end_int
-    incq %rsi                   # Flytta till nästa 
+    incq %rsi                   # Flytta till nästa
     jmp _check_num
 
 _end_int:
@@ -99,7 +99,7 @@ getText:
 _get_next_text:
     call inImage
     movq in_buffer_pos, %rdx
-    
+
 _getText_loop:
     cmpq %rsi, %rax            # Har vi läst tillräckligt med tecken?
     je _return_GetText         # Om ja, avsluta
@@ -110,7 +110,7 @@ _getText_loop:
 
     movb %r8b, (%rdi, %rax)    # Kopiera byte till målbuffern
     incq %rax                  # Öka räknaren för antal tecken
-    cmpq $63, rdx
+    cmpq $63, %rdx
     je _return_GetText
     incq %rdx
     jmp _getText_loop
@@ -120,11 +120,11 @@ _return_GetText:
     movq %rdx, in_buffer_pos            # Spara antalet överförda tecken i %rdi
 
 getChar:
-    xorq %rax, %rax 
+    xorq %rax, %rax
     movq in_buffer_pos, %rsi
     leaq in_buffer, %rdi
     cmpq $63, %rsi
-    je _get_new_char 
+    je _get_new_char
     jmp _getChar_loop
 
 _get_new_char:
@@ -173,14 +173,14 @@ outImage:
     call puts                  # Anropa printf för att skriva ut strängen
     movq $0, %rdi # Återställ buffertpositionen
     movq %rdi, out_buffer_pos # Återställ buffertpositionen
-    
+
     popq %rsi
     popq %rdi
     ret
 
 putInt:
     pushq %rbp                 # Spara baspekaren
-    
+
     leaq out_buffer, %r8
     movq out_buffer_pos, %r9
     movq $10, %rsi 
@@ -329,7 +329,7 @@ _outpos_lower:
     jmp _return_outpos
 
 _outpos_higher:
-    movq $63, %rax 
+    movq $63, %rax
     jmp _return_outpos
 
 _return_outpos:
