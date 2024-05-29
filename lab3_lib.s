@@ -293,25 +293,29 @@ _return_put_text:
     movq %rsi, out_buffer_pos
     ret
 
-
 putChar:
-    movq out_buffer_pos, %rsi
-    leaq out_buffer, %rdx
-    cmpq $63, %rsi
-    je _fetch_putChar
-    jmp _loop_put_char
+    pushq %rsi                   # Save %rsi
+    movq out_buffer_pos, %rsi    # Load current output buffer position
+    leaq out_buffer, %rdx        # Load effective address of out_buffer
 
-_loop_put_char:
-    movb %dil, (%rdx, %rsi)
-    incq %rsi
+    cmpq $63, %rsi               # Compare buffer position with buffer size
+    je _fetch_putChar            # If buffer is full, handle overflow
+
+    movb %dil, (%rdx, %rsi)      # Move the character to the buffer
+    incq %rsi                    # Increment buffer position
+    movq %rsi, out_buffer_pos    # Update output buffer position
+    popq %rsi                    # Restore %rsi
+    ret                          # Return from subroutine
 
 _fetch_putChar:
-    call outImage                    # Anropa outImage för att tömma bufferten
-    movq out_buffer_pos, %rsi                   # Försök skriva tecknet igen efter hantering av överflöde
+    call outImage                # Handle full buffer (print and reset)
+    movq $0, %rsi                # Reset buffer position
+    movb %dil, (%rdx, %rsi)      # Move the character to the buffer
+    incq %rsi                    # Increment buffer position
+    movq %rsi, out_buffer_pos    # Update output buffer position
+    popq %rsi                    # Restore %rsi
+    ret                          # Return from subroutine
 
-_return_putChar:
-    movq %rsi, out_buffer_pos
-    ret                              # Återvänd från rutinen
 
 getOutPos:
     movq out_buffer_pos, %rax   # Returnera aktuell position
