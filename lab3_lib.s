@@ -18,7 +18,7 @@ out_buffer_pos:
 inImage:
     pushq %rbp
     movq %rsp, %rbp
-    subq $32, %rsp
+    subq $16, %rsp
 
     pushq %rdi
     pushq %rsi
@@ -36,7 +36,7 @@ inImage:
     popq %rsi
     popq %rdi
 
-    addq $32, %rsp
+    addq $16, %rsp
     popq %rbp
     ret
 
@@ -127,7 +127,7 @@ _return_int:
 getText:
     pushq %rbp
     movq %rsp, %rbp
-    subq $32, %rsp
+    subq $16, %rsp
 
     pushq %rbx
     pushq %r12
@@ -174,14 +174,14 @@ _return_GetText:
     popq %r12
     popq %rbx
 
-    addq $32, %rsp
+    addq $16, %rsp
     popq %rbp
     ret
 
 getChar:
     pushq %rbp
     movq %rsp, %rbp
-    subq $32, %rsp
+    subq $16, %rsp
 
     pushq %rbx
     pushq %r12
@@ -213,7 +213,7 @@ _result_get_char:
     popq %r12
     popq %rbx
 
-    addq $32, %rsp
+    addq $16, %rsp
     popq %rbp
     ret
 
@@ -225,7 +225,7 @@ getInPos:
 setInPos:
     pushq %rbp
     movq %rsp, %rbp
-    subq $32, %rsp
+    subq $16, %rsp
 
     pushq %rbx
     pushq %r12
@@ -258,14 +258,14 @@ _set_in_pos_end:
     popq %r12
     popq %rbx
 
-    addq $32, %rsp
+    addq $16, %rsp
     popq %rbp
     ret
 
 outImage:
     pushq %rbp
     movq %rsp, %rbp
-    subq $32, %rsp
+    subq $16, %rsp
 
     pushq %rbx
     pushq %r12
@@ -288,14 +288,14 @@ outImage:
     popq %r12
     popq %rbx
 
-    addq $32, %rsp
+    addq $16, %rsp
     popq %rbp
     ret
 
 putInt:
     pushq %rbp                     # Save base pointer
     movq %rsp, %rbp                # Set base pointer
-    subq $32, %rsp                 # Allocate space on stack for local variables
+    subq $16, %rsp                 # Allocate space on stack for local variables
 
     pushq %rbx                     # Save %rbx
     pushq %r12                     # Save %r12
@@ -370,14 +370,14 @@ _put_int_done:
     popq %r13                      # Restore %r13
     popq %r12                      # Restore %r12
     popq %rbx                      # Restore %rbx
-    addq $32, %rsp                 # Restore stack
+    addq $16, %rsp                 # Restore stack
     popq %rbp                      # Restore base pointer
     ret
 
 putText:
     pushq %rbp                   # Save base pointer
     movq %rsp, %rbp              # Set base pointer
-    subq $32, %rsp               # Allocate space on stack for local variables
+    subq $16, %rsp               # Allocate space on stack for local variables
 
     pushq %rbx                   # Save %rbx
     pushq %r12                   # Save %r12
@@ -425,35 +425,46 @@ _return_put_text:
     popq %r13                    # Restore %r13
     popq %r12                    # Restore %r12
     popq %rbx                    # Restore %rbx
-    addq $32, %rsp               # Restore stack
+    addq $16, %rsp               # Restore stack
     popq %rbp                    # Restore base pointer
     ret                          # Return from subroutine
 
 putChar:
+    pushq %rbp                   # Save base pointer
+    movq %rsp, %rbp              # Set base pointer
+    subq $16, %rsp               # Allocate space on stack for local variables
 
+    pushq %rbx                   # Save %rbx
+    pushq %r12                   # Save %r12
+    pushq %r13                   # Save %r13
+    pushq %r14                   # Save %r14
+    pushq %r15                   # Save %r15
 
-    pushq %rsi                   # Save %rsi
-    movq out_buffer_pos, %rsi    # Load current output buffer position
-    leaq out_buffer, %rdx        # Load effective address of out_buffer
-
-    cmpq $63, %rsi               # Compare buffer position with buffer size
-    je _fetch_putChar            # If buffer is full, handle overflow
-
-    movb %dil, (%rdx, %rsi)      # Move the character to the buffer
-    incq %rsi                    # Increment buffer position
-    movq %rsi, out_buffer_pos    # Update output buffer position
-    popq %rsi                    # Restore %rsi
-    ret                          # Return from subroutine
+    movq out_buffer_pos, %rsi
+    leaq out_buffer, %rdx
+    cmpq $63, %rsi
+    je _fetch_putChar
+    jmp _move_char
 
 _fetch_putChar:
-    call outImage                # Handle full buffer (print and reset)
-    movq $0, %rsi                # Reset buffer position
-    movb %dil, (%rdx, %rsi)      # Move the character to the buffer
-    incq %rsi                    # Increment buffer position
-    movq %rsi, out_buffer_pos    # Update output buffer position
-    popq %rsi                    # Restore %rsi
-    ret                          # Return from subroutine
+    call outImage
+    movq out_buffer_pos, %rsi
 
+_move_char:
+    movb %dil, (%rdx, %rsi)
+    incq %rsi
+
+_return_char:
+    movq %rsi, out_buffer_pos
+
+    popq %r15                    # Restore %r15
+    popq %r14                    # Restore %r14
+    popq %r13                    # Restore %r13
+    popq %r12                    # Restore %r12
+    popq %rbx                    # Restore %rbx
+    addq $16, %rsp               # Restore stack
+    popq %rbp                    # Restore base pointer
+    ret                          # Return from subroutine
 
 getOutPos:
     movq out_buffer_pos, %rax   # Returnera aktuell position
@@ -462,7 +473,7 @@ getOutPos:
 setOutPos:
     pushq %rbp
     movq %rsp, %rbp
-    subq $32, %rsp
+    subq $16, %rsp
 
     pushq %rbx
     pushq %r12
@@ -495,7 +506,7 @@ _set_out_pos_end:
     popq %r12
     popq %rbx
 
-    addq $32, %rsp
+    addq $16, %rsp
     popq %rbp
     ret
 
