@@ -20,113 +20,115 @@ inImage:
     pushq %rsi
     pushq %rdx
 
-    movq $in_buffer, %rdi   # Loading the address of the buffer into %rdi
-    movq $64, %rsi          # Setting the length to read
-    movq stdin, %rdx        # Loading stdin
-    call fgets              # Calling fgets to read input
+    movq $in_buffer, %rdi   # Ladda adressen för bufferten till %rdi
+    movq $64, %rsi          # Ange längden att läsa
+    movq stdin, %rdx        # Ladda stdin
+    call fgets              # Anropa fgets för att läsa indata
 
-    leaq in_buffer_pos, %rdi  # Computing the effective address of in_buffer_pos
-    movq $0, (%rdi)                 # Storing 0 at the computed address
+    leaq in_buffer_pos, %rdi  # Beräkna effektiv adress för in_buffer_pos
+    movq $0, (%rdi)                 # Spara 0 på den beräknade adressen
 
     popq %rdx
     popq %rsi
     popq %rdi
-    ret          # Return from the subroutine
+    ret          # Returnera från subrutinen
 
 getInt:
-    xorq %rax, %rax                # Clear %rax for the result
-    movq in_buffer_pos, %rsi # Load current input buffer position
-    leaq in_buffer, %rdi     # Load effective address of in_buffer
-    xorq %rdx, %rdx                # Clear %rdx for the sign flag (0 = positive, 1 = negative)
+    xorq %rax, %rax                # Rensa %rax för resultatet
+    movq in_buffer_pos, %rsi # Ladda aktuell position för indata
+
+    leaq in_buffer, %rdi     # Ladda effektiv adress för in_buffer
+    xorq %rdx, %rdx                # Rensa %rdx för teckenflaggan (0 = positiv, 1 = negativ)
     cmpq $63, %rsi
-    je _refill_buffer # pointer at end of buffer
+    je _refill_buffer # pekare på slutet av bufferten
 
 _check_whitespace:
-    cmpb $' ', (%rdi, %rsi)        # Check for whitespace
+    cmpb $' ', (%rdi, %rsi)        # Kontrollera om det finns mellanslag
     jne _check_sign
 
     cmpq $63, %rsi
-    je _end_int              # If buffer position is at end, refill
+    je _end_int              # Om buffertpositionen är i slutet, fyll på
 
-    incq %rsi                      # Move to next character
+    incq %rsi                      # Gå till nästa tecken
     jmp _check_whitespace
 
 _check_sign:
-    cmpb $'-', (%rdi, %rsi)        # Check for negative sign
+    cmpb $'-', (%rdi, %rsi)        # Kontrollera om det finns negativt tecken
     je _set_negative
-    cmpb $'+', (%rdi, %rsi)        # Check for positive sign
+    cmpb $'+', (%rdi, %rsi)        # Kontrollera om det finns positivt tecken
+    jne _check_digit               # Hoppa över om det inte finns något tecken
     cmpq $63, %rsi
     incq %rsi
     jmp _check_digit
 
 _set_negative:
-    movq $1, %rdx                  # Set sign flag to negative
-    incq %rsi                      # Move to next character
+    movq $1, %rdx                  # Sätt teckenflaggan till negativ
+    incq %rsi                      # Gå till nästa tecken
     jmp _check_digit
 
 _check_digit:
     cmpq $63, %rsi
-    je _refill_buffer              # If buffer position is at end, refill
-    movb (%rdi, %rsi), %cl         # Load current character
-    cmpb $'0', %cl                 # Check if it is a digit
-    jb _end_int                    # If less than '0', end
+    je _refill_buffer              # Om buffertpositionen är i slutet, fyll på
+    movb (%rdi, %rsi), %cl         # Ladda aktuellt tecken
+    cmpb $'0', %cl                 # Kontrollera om det är en siffra
+    jb _end_int                    # Om mindre än '0', sluta
     cmpb $'9', %cl
-    ja _end_int                    # If greater than '9', end
+    ja _end_int                    # Om större än '9', sluta
 
-    subb $'0', %cl                 # Convert ASCII to numeric value
-    imulq $10, %rax                # Multiply result by 10
-    addq %rcx, %rax                # Add the digit to the result
-    incq %rsi                      # Move to next character
+    subb $'0', %cl                 # Konvertera ASCII till numeriskt värde
+    imulq $10, %rax                # Multiplicera resultatet med 10
+    addq %rcx, %rax                # Lägg till siffran till resultatet
+    incq %rsi                      # Gå till nästa tecken
     jmp _check_digit
 
 _refill_buffer:
-    call inImage                   # Refill input buffer
-    movq in_buffer_pos , %rsi # Reload input buffer position
-    jmp _check_whitespace          # Continue checking for digits
+    call inImage                   # Fyll på indata-bufferten
+    movq in_buffer_pos , %rsi # Ladda om aktuell position för indata-bufferten
+    jmp _check_whitespace          # Fortsätt kontrollera siffror
 
 _end_int:
-    cmpq $1, %rdx                  # Check if number is negative
+    cmpq $1, %rdx                  # Kontrollera om talet är negativt
     jne _return_int
-    negq %rax                      # Apply negative sign
+    negq %rax                      # Applicera negativt tecken
+    jmp _return_int                # Hoppa till returnering efter att ha negatiserat talet
 
 _return_int:
-    movq %rsi, in_buffer_pos  # Update input buffer position
+    movq %rsi, in_buffer_pos  # Uppdatera aktuell position för indata-bufferten
     ret
 
 getText:
-    movq in_buffer_pos , %rdx    # Load current input buffer position into %rdx
-    leaq in_buffer , %rcx        # Load effective address of in_buffer into %rcx
-    xorq %rax, %rax                   # Clear %rax (used as character count)
+    movq in_buffer_pos , %rdx    # Ladda aktuell position för indata-bufferten till %rdx
+    leaq in_buffer , %rcx        # Ladda effektiv adress för in_buffer till %rcx
+    xorq %rax, %rax                   # Rensa %rax (används som teckenräknare)
 
-    cmpq $63, %rdx                    # Compare buffer position with buffer limit
-    je _get_next_text                 # If buffer is at limit, fetch new data
+    cmpq $63, %rdx                    # Jämför buffertens position med buffertens gräns
+    je _get_next_text                 # Om bufferten är på gränsen, hämta nya data
     jmp _getText_loop
 
 _get_next_text:
-    call inImage                      # Call function to get next input buffer
-    movq in_buffer_pos , %rdx    # Reload input buffer position
+    call inImage                      # Anropa funktion för att hämta nästa indata-buffert
+    movq in_buffer_pos , %rdx    # Ladda om aktuell position för indata-bufferten
 
 _getText_loop:
-    cmpq %rsi, %rax                   # Compare character count with desired length
-    je _return_GetText                # If reached the desired length, return
+    cmpq %rsi, %rax                   # Jämför teckenräknaren med önskad längd
+    je _return_GetText                # Om önskad längd har uppnåtts, returnera
 
-    movb (%rcx, %rdx), %r8b           # Load a byte from the input buffer
-    cmpb $0, %r8b                     # Check if it's the end of the string
-    je _return_GetText                # If end of string, return
+    movb (%rcx, %rdx), %r8b           # Ladda ett byte från indata-bufferten
+    cmpb $0, %r8b                     # Kontrollera om det är slutet av strängen
+    je _return_GetText                # Om det är slutet av strängen, returnera
 
-    movb %r8b, (%rdi, %rax)           # Copy byte to destination buffer
-    incq %rax                         # Increment character count
+    movb %r8b, (%rdi, %rax)           # Kopiera byte till destinations-bufferten
+    incq %rax                         # Öka teckenräknaren
 
-    cmpq $63, %rdx                    # Check if the input buffer position is at its limit
-    je _get_next_text                 # If at limit, fetch new data
+    cmpq $63, %rdx                    # Kontrollera om aktuell position är på buffertens gr
 
-    incq %rdx                         # Increment input buffer position
+    je _get_next_text                 # Om det är på gränsen, hämta nya data
+
+    incq %rdx                         # Öka indata-buffertens position
     jmp _getText_loop
 
 _return_GetText:
-    movb $0, (%rdi, %rax)             # NULL-terminate the destination string
-    movq %rdx, in_buffer_pos     # Save updated input buffer position
-    ret
+    movb $0, (%rdi, %rax)             # Avsluta destinationsträngen med
 
 getChar:
     xorq %rax, %rax
@@ -154,24 +156,24 @@ getInPos:
 
 setInPos:
     cmpq $0, %rdi                 # Jämför indata värdet med 0
-    jle _inpos_set_to_zero         # Om mindre än 0, hoppa
+    jle _inpos_set_to_zero        # Om mindre än 0, hoppa
 
-    cmpq $63, %rdi                # Jämför indata värdet med 63 (MAXPOS)
-    jge _inpos_set_to_max          # Om större än 63, hoppa
+    cmpq in_buffer_pos, %rdi      # Jämför indata värdet med aktuell buffertposition
+    jge _inpos_set_to_max         # Om större än eller lika med aktuell buffertposition, hoppa
 
-    movq %rdi, %rax # Sätt in_buffer_pos till indata värdet
+    movq %rdi, in_buffer_pos      # Sätt in_buffer_pos till indata värdet
     jmp _set_in_pos_end
 
 _inpos_set_to_zero:
-    movq $0, %rax                # Sätt indata värdet till 0
-    jmp _set_in_pos_end        # Gå till inställningen av buffertpositionen
+    movq $0, in_buffer_pos        # Sätt indata värdet till 0
+    jmp _set_in_pos_end
 
 _inpos_set_to_max:
-    movq $63, %rax                # Sätt indata värdet till 63 (MAXPOS)
-    jmp _set_in_pos_end        # Gå till inställningen av buffertpositionen
+    movq in_buffer_pos, %rax      # Ladda aktuell buffertposition i %rax
+    movq %rax, in_buffer_pos      # Sätt in_buffer_pos till aktuell buffertposition
+    jmp _set_in_pos_end
 
 _set_in_pos_end:
-    movq %rax, in_buffer_pos # Sätt in_buffer_pos till värdet i %rdi
     ret
 
 outImage:
@@ -230,12 +232,15 @@ _put_int_divide:
 
 _put_int_output_sign:
     cmpq $1, %rbp                  # Check if number was negative
-    jne _put_int_output_digits
+    jne _put_int_output_digits     # If not negative, jump to output digits
 
     cmpq $62, %r9                  # Check buffer position for overflow
-    jge _put_int_handle_overflow
+    jge _put_int_handle_overflow   # If buffer overflow, handle overflow
+
     movb $'-', (%r8, %r9)          # Insert negative sign
     incq %r9                       # Increment buffer position
+    jmp _put_int_output_digits     # Continue to output digits
+
 
 _put_int_output_digits:
     cmpq $0, %rcx                  # Check if there are digits to output
@@ -329,29 +334,26 @@ getOutPos:
     ret
 
 setOutPos:
-    cmpq $0, %rdi
-    jle _outpos_lower
+    cmpq $0, %rdi                 # Jämför utdatavärdet med 0
+    jle _outpos_lower             # Om mindre än 0, hoppa
 
-    cmpq $63, %rdi
-    jge _outpos_lower
+    cmpq out_buffer_pos, %rdi     # Jämför utdatavärdet med aktuell buffertposition
+    jge _outpos_higher            # Om större än eller lika med aktuell buffertposition, hoppa
 
-    movq %rdi, %rax
-    jmp _return_outpos
-
+    movq %rdi, out_buffer_pos     # Sätt out_buffer_pos till utdatavärdet
+    jmp _set_out_pos_end
 
 _outpos_lower:
-    movq $0, %rax # Sätt out_buffer_pos till 0
-    jmp _return_outpos
+    movq $0, out_buffer_pos       # Sätt out_buffer_pos till 0
+    jmp _set_out_pos_end
 
 _outpos_higher:
-    movq $63, %rax
-    jmp _return_outpos
+    movq out_buffer_pos, %rax     # Ladda aktuell buffertposition i %rax
+    movq %rax, out_buffer_pos     # Sätt out_buffer_pos till aktuell buffertposition
+    jmp _set_out_pos_end
 
-_return_outpos:
-    movq %rax, out_buffer
+_set_out_pos_end:
     ret
-
-
 
 
 
