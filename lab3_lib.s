@@ -275,10 +275,22 @@ outImage:
     pushq %rdi
     pushq %rsi
 
-    leaq out_buffer, %rdi     # Ladda adressen till formatsträngen i %rdi
-    call puts                  # Anropa printf för att skriva ut strängen
-    movq $0, %rdi # Återställ buffertpositionen
-    movq %rdi, out_buffer_pos # Återställ buffertpositionen
+    leaq out_buffer, %rdi     # Load the address of out_buffer into %rdi
+    movq out_buffer_pos, %rsi # Load the current position of the output buffer into %rsi
+    xorq %rcx, %rcx           # Clear %rcx (used for loop counter)
+
+_clear_buffer:
+    movb $0, (%rdi, %rsi, 1) # Write null terminator to each byte of the buffer
+    incq %rsi                # Move to the next byte
+    cmpq $63, %rsi           # Compare the current position to the buffer size
+    jge _output_buffer       # If the end of the buffer is reached, go to output
+
+    jmp _clear_buffer        # Otherwise, continue clearing the buffer
+
+_output_buffer:
+    leaq out_buffer, %rdi     # Load the address of out_buffer into %rdi
+    call puts                 # Call puts to print the buffer
+    movq $0, out_buffer_pos   # Reset the buffer position to 0
 
     popq %rsi
     popq %rdi
@@ -291,6 +303,7 @@ outImage:
     addq $16, %rsp
     popq %rbp
     ret
+
 
 putInt:
     pushq %rbp                     # Save base pointer
