@@ -1,12 +1,12 @@
 .data
 in_buffer:
-    .space 64 # Reservera buffern
+    .space 64, 0x0 # Reservera buffern
 
 in_buffer_pos:
     .quad 0
 
 out_buffer:
-    .space 64 # Reservera buffern
+    .space 64, 0x0 # Reservera buffern
 
 out_buffer_pos:
     .quad 0
@@ -39,6 +39,10 @@ getInt:
     je _next_int
     jmp _white_space
 
+_next_int:
+    call inImage
+    movq in_buffer_pos, %rsi
+
 _white_space:
     cmpb $' ',(%rdi, %rsi)            # Kolla om mellanslag
     jne _check_sign
@@ -46,10 +50,6 @@ _white_space:
     je _end_int
     incq %rsi
     jmp _white_space
-
-_next_int:
-    call inImage
-    movq in_buffer_pos, %rsi
 
 _check_sign:
     cmpb $'-', (%rdi, %rsi) # Kolla om negativt tecken
@@ -90,34 +90,39 @@ _get_int_return:
     ret
 
 getText:
-    movq in_buffer_pos(%rip), %rdx            # Spara buf (första parameter) i %rbx
-    leaq in_buffer(%rip), %rcx            # Spara n (andra parameter) i %rdi
-    cmpq $63, %rdx              # Initialisera räknare för antal tecken
-    je _get_next_text
+    movq in_buffer_pos(%rip), %rdx    # Load current input buffer position into %rdx
+    leaq in_buffer(%rip), %rcx        # Load effective address of in_buffer into %rcx
+    xorq %rax, %rax                   # Clear %rax (used as character count)
+
+    cmpq $63, %rdx                    # Compare buffer position with buffer limit
+    je _get_next_text                 # If buffer is at limit, fetch new data
     jmp _getText_loop
 
 _get_next_text:
-    call inImage
-    movq in_buffer_pos, %rdx
+    call inImage                      # Call function to get next input buffer
+    movq in_buffer_pos(%rip), %rdx    # Reload input buffer position
 
 _getText_loop:
-    cmpq %rsi, %rax            # Har vi läst tillräckligt med tecken?
-    je _return_GetText         # Om ja, avsluta
+    cmpq %rsi, %rax                   # Compare character count with desired length
+    je _return_GetText                # If reached the desired length, return
 
-    movb (%rcx, %rdx), %r8b   # Ladda en byte från inmatningsbufferten
-    cmpb $0, %r8b              # Kolla om slutet på strängen
-    je _return_GetText         # Om ja, avsluta
+    movb (%rcx, %rdx), %r8b           # Load a byte from the input buffer
+    cmpb $0, %r8b                     # Check if it's the end of the string
+    je _return_GetText                # If end of string, return
 
-    movb %r8b, (%rdi, %rax)    # Kopiera byte till målbuffern
-    incq %rax                  # Öka räknaren för antal tecken
-    cmpq $63, %rdx
-    je _return_GetText
-    incq %rdx
+    movb %r8b, (%rdi, %rax)           # Copy byte to destination buffer
+    incq %rax                         # Increment character count
+
+    cmpq $63, %rdx                    # Check if the input buffer position is at its limit
+    je _get_next_text                 # If at limit, fetch new data
+
+    incq %rdx                         # Increment input buffer position
     jmp _getText_loop
 
 _return_GetText:
-    movb $0, 1(%rdi, %rax)      # NULL-terminera strängen
-    movq %rdx, in_buffer_pos            # Spara antalet överförda tecken i %rdi
+    movb $0, (%rdi, %rax)             # NULL-terminate the destination string
+    movq %rdx, in_buffer_pos(%rip)    # Save updated input buffer position
+    ret
 
 getChar:
     xorq %rax, %rax
@@ -179,12 +184,17 @@ outImage:
     ret
 
 putInt:
-    pushq %rbp                 # Spara baspekaren
+    pushq %rbp                 # Save base pointer
+    movq %rsp, %rbp            # Set base pointer
+    subq $16, %rsp             # Allocate space on stack for local variables
 
-    leaq out_buffer, %r8
     movq out_buffer_pos, %r9
-    movq $10, %rsi 
-    xorq %rdx, %rdx
+    leaq out_buffer(%rip), %r8 # Load effective address of out_buffer
+    movq $10, %rsi             # Set divisor to 10
+    xorq %rdx, %rdx            # Clear %rdx for division
+    xorq %rcx, %rcx            # Clear %rcx for digit count
+    xorq %rbp, %rbp            # Clear %rbp, used for negative flag
+
     cmpq $0, %rdi
     jl _put_int_negativ
 
@@ -192,65 +202,59 @@ putInt:
     jmp _put_int_division
 
 _put_int_negativ:
-    negq %rdi
-    movq %rdi, %rax
-    movq $1, %rbp
+    negq %rdi                  # Negate %rdi
+    movq %rdi, %rax            # Move negated value to %rax
+    movq $1, %rbp              # Set negative flag
 
 _put_int_division:
-    idivq %rsi
-    pushq %rdx
-    incq %rcx
+    idivq %rsi                 # Divide %rax by %rsi, quotient in %rax, remainder in %rdx
+    pushq %rdx                 # Push remainder (digit) onto stack
+    incq %rcx                  # Increment digit count
     cmpq $0, %rax
     je _check_sign_put_int
 
-    xorq %rdx, %rdx
+    xorq %rdx, %rdx            # Clear %rdx for next division
     jmp _put_int_division
 
 _check_sign_put_int:
-    movq %rcx, %rdi
     cmpq $1, %rbp
     jne _put_int_lenght
 
-    addq %r9, %rdi
-    addq $1, %rdi
-    cmpq $62, %rdi
+    addq $1, %r9               # Adjust for negative sign
+    cmpq $62, %r9
     jg _put_int_loop
-    jmp _put_int_set_neg
-
-_put_int_loop:
-    call outImage
-    movq out_buffer, %r9
-    cmpq $1, %rbp
-    je _put_int_set_neg
-    jmp _put_int_handle_str
+    movq $'-', (%r8, %r9)      # Insert negative sign
+    incq %r9                   # Increment position
 
 _put_int_lenght:
-    movq %rcx, %rdi
-    addq %r9, %rdi
-    cmpq $62, %rdi
+    addq %rcx, %r9             # Adjust for digit count
+    cmpq $62, %r9
     jg _put_int_loop
-    jmp _put_int_handle_str
-
-_put_int_set_neg:
-    movq $'-', (%r8, %r9)
-    incq %r9
 
 _put_int_handle_str:
     cmpq $0, %rcx
     je _return_put_int
 
-    popq %rdx
-    addq $'0', %rdx
-    movb %dl, (%r8, %r9)
-    decq %rcx
-    incq %r9
+    popq %rdx                  # Pop digit from stack
+    addq $'0', %rdx            # Convert to ASCII
+    movb %dl, (%r8, %r9)       # Store ASCII digit in buffer
+    decq %rcx                  # Decrement digit count
+    incq %r9                   # Increment buffer position
+    jmp _put_int_handle_str
+
+_put_int_loop:
+    call outImage              # Handle full buffer (assuming this function resets out_buffer and out_buffer_pos)
+    movq out_buffer_pos, %r9   # Reload updated out_buffer_pos
+
     jmp _put_int_handle_str
 
 _return_put_int:
-    movb $0, (%r8, %r9)
-    movq %r9, out_buffer_pos
-    popq %rbp
+    movb $0, (%r8, %r9)        # Null-terminate the string
+    movq %r9, out_buffer_pos   # Update out_buffer_pos
+    addq $16, %rsp             # Restore stack
+    popq %rbp                  # Restore base pointer
     ret
+
 
 putText:
     movq out_buffer_pos, %rsi

@@ -13,7 +13,7 @@ int main(){
     long long temp;
     unsigned int pos, count;
 
-    // Lägger inledande text i utmatningsbuffer, 
+    // Lägger inledande text i utmatningsbuffer,
     // samt skickar innehåll från utmatningsbuffer till terminal.
     // Hämtar sedan text från terminalinmatning.
     putText(headMsg);
