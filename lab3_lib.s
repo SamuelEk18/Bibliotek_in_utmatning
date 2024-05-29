@@ -16,27 +16,44 @@ out_buffer_pos:
 .text
 
 inImage:
+    pushq %rbp
+    movq %rsp, %rbp
+    subq $32, %rsp
+
     pushq %rdi
     pushq %rsi
     pushq %rdx
 
-    movq $in_buffer, %rdi   # Ladda adressen för bufferten till %rdi
-    movq $64, %rsi          # Ange längden att läsa
-    movq stdin, %rdx        # Ladda stdin
-    call fgets              # Anropa fgets för att läsa indata
+    movq $in_buffer, %rdi    # Load address of the buffer into %rdi
+    movq $64, %rsi           # Set length to read
+    movq stdin, %rdx         # Load stdin
+    call fgets               # Call fgets to read input
 
-    leaq in_buffer_pos, %rdi  # Beräkna effektiv adress för in_buffer_pos
-    movq $0, (%rdi)                 # Spara 0 på den beräknade adressen
+    leaq in_buffer_pos, %rdi # Calculate effective address for in_buffer_pos
+    movq $0, (%rdi)          # Store 0 at the calculated address
 
     popq %rdx
     popq %rsi
     popq %rdi
-    ret          # Returnera från subrutinen
+
+    addq $32, %rsp
+    popq %rbp
+    ret
 
 getInt:
-    xorq %rax, %rax                # Rensa %rax för resultatet
-    movq in_buffer_pos, %rsi # Ladda aktuell position för indata
+    pushq %rbp                  # Save the base pointer
+    movq %rsp, %rbp             # Set the base pointer
+    pushq %rbx                  # Save %rbx
+    pushq %r12                  # Save %r12
+    pushq %r13                  # Save %r13
+    pushq %r14                  # Save %r14
+    pushq %r15                  # Save %r15
 
+    xorq %rax, %rax                # Rensa %rax för resultatet
+    xorq %rdx, %rdx
+    xorq %rcx, %rcx
+
+    movq in_buffer_pos, %rsi # Ladda aktuell position för indata
     leaq in_buffer, %rdi     # Ladda effektiv adress för in_buffer
     xorq %rdx, %rdx                # Rensa %rdx för teckenflaggan (0 = positiv, 1 = negativ)
     cmpq $63, %rsi
@@ -55,8 +72,10 @@ _check_whitespace:
 _check_sign:
     cmpb $'-', (%rdi, %rsi)        # Kontrollera om det finns negativt tecken
     je _set_negative
+
     cmpb $'+', (%rdi, %rsi)        # Kontrollera om det finns positivt tecken
     jne _check_digit               # Hoppa över om det inte finns något tecken
+
     cmpq $63, %rsi
     incq %rsi
     jmp _check_digit
@@ -69,9 +88,11 @@ _set_negative:
 _check_digit:
     cmpq $63, %rsi
     je _refill_buffer              # Om buffertpositionen är i slutet, fyll på
+
     movb (%rdi, %rsi), %cl         # Ladda aktuellt tecken
     cmpb $'0', %cl                 # Kontrollera om det är en siffra
     jb _end_int                    # Om mindre än '0', sluta
+
     cmpb $'9', %cl
     ja _end_int                    # Om större än '9', sluta
 
@@ -90,13 +111,30 @@ _end_int:
     cmpq $1, %rdx                  # Kontrollera om talet är negativt
     jne _return_int
     negq %rax                      # Applicera negativt tecken
-    jmp _return_int                # Hoppa till returnering efter att ha negatiserat talet
 
 _return_int:
     movq %rsi, in_buffer_pos  # Uppdatera aktuell position för indata-bufferten
-    ret
+
+    popq %r15                   # Restore %r15
+    popq %r14                   # Restore %r14
+    popq %r13                   # Restore %r13
+    popq %r12                   # Restore %r12
+    popq %rbx                   # Restore %rbx
+    movq %rbp, %rsp             # Restore the stack pointer
+    popq %rbp                   # Restore the base pointer
+    ret                         # Return from subroutine
 
 getText:
+    pushq %rbp
+    movq %rsp, %rbp
+    subq $32, %rsp
+
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+
     movq in_buffer_pos , %rdx    # Ladda aktuell position för indata-bufferten till %rdx
     leaq in_buffer , %rcx        # Ladda effektiv adress för in_buffer till %rcx
     xorq %rax, %rax                   # Rensa %rax (används som teckenräknare)
@@ -130,7 +168,27 @@ _getText_loop:
 _return_GetText:
     movb $0, (%rdi, %rax)             # Avsluta destinationsträngen med
 
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %rbx
+
+    addq $32, %rsp
+    popq %rbp
+    ret
+
 getChar:
+    pushq %rbp
+    movq %rsp, %rbp
+    subq $32, %rsp
+
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+
     xorq %rax, %rax
     movq in_buffer_pos, %rsi
     leaq in_buffer, %rdi
@@ -148,13 +206,33 @@ _getChar_loop:
 
 _result_get_char:
     movq %rsi, in_buffer_pos
+
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %rbx
+
+    addq $32, %rsp
+    popq %rbp
     ret
+
 
 getInPos:
     movq in_buffer_pos , %rax
     ret
 
 setInPos:
+    pushq %rbp
+    movq %rsp, %rbp
+    subq $32, %rsp
+
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+
     cmpq $0, %rdi                 # Jämför indata värdet med 0
     jle _inpos_set_to_zero        # Om mindre än 0, hoppa
 
@@ -174,9 +252,26 @@ _inpos_set_to_max:
     jmp _set_in_pos_end
 
 _set_in_pos_end:
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %rbx
+
+    addq $32, %rsp
+    popq %rbp
     ret
 
 outImage:
+    pushq %rbp
+    movq %rsp, %rbp
+    subq $32, %rsp
+
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
     pushq %rdi
     pushq %rsi
 
@@ -187,12 +282,26 @@ outImage:
 
     popq %rsi
     popq %rdi
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %rbx
+
+    addq $32, %rsp
+    popq %rbp
     ret
 
 putInt:
     pushq %rbp                     # Save base pointer
     movq %rsp, %rbp                # Set base pointer
-    subq $16, %rsp                 # Allocate space on stack for local variables
+    subq $32, %rsp                 # Allocate space on stack for local variables
+
+    pushq %rbx                     # Save %rbx
+    pushq %r12                     # Save %r12
+    pushq %r13                     # Save %r13
+    pushq %r14                     # Save %r14
+    pushq %r15                     # Save %r15
 
     movq out_buffer_pos , %r9 # Load current output buffer position
     leaq out_buffer , %r8     # Load effective address of out_buffer
@@ -202,18 +311,10 @@ putInt:
     xorq %rbp, %rbp                # Clear %rbp, used for negative flag
 
     cmpq $0, %rdi               # Check if the input is zero
-    je _put_zero                   # If zero, handle separately
     jl _put_int_negative
 
     movq %rdi, %rax
     jmp _put_int_divide
-
-_put_zero:
-    cmpq $63, %r9                  # Check buffer position for overflow
-    jge _put_int_handle_overflow
-    movb $'0', (%r8, %r9)          # Place '0' in buffer
-    incq %r9                       # Increment buffer position
-    jmp _put_int_done
 
 _put_int_negative:
     negq %rdi                      # Negate %rdi
@@ -262,12 +363,28 @@ _put_int_handle_overflow:
     jmp _put_int_output_sign       # Retry outputting sign/digits
 
 _put_int_done:
-    movq %r9, out_buffer_pos  # Update output buffer position
-    addq $16, %rsp                 # Restore stack
+    movq %r9, out_buffer_pos       # Update output buffer position
+
+    popq %r15                      # Restore %r15
+    popq %r14                      # Restore %r14
+    popq %r13                      # Restore %r13
+    popq %r12                      # Restore %r12
+    popq %rbx                      # Restore %rbx
+    addq $32, %rsp                 # Restore stack
     popq %rbp                      # Restore base pointer
     ret
 
 putText:
+    pushq %rbp                   # Save base pointer
+    movq %rsp, %rbp              # Set base pointer
+    subq $32, %rsp               # Allocate space on stack for local variables
+
+    pushq %rbx                   # Save %rbx
+    pushq %r12                   # Save %r12
+    pushq %r13                   # Save %r13
+    pushq %r14                   # Save %r14
+    pushq %r15                   # Save %r15
+
     movq out_buffer_pos, %rsi
     leaq out_buffer, %rdx
     movq $0, %rcx
@@ -301,11 +418,20 @@ _put_text_loop:
     jmp _put_text_loop
 
 _return_put_text:
-    movq %rsi, out_buffer_pos
-    ret
+    movq %rsi, out_buffer_pos    # Update output buffer position
 
+    popq %r15                    # Restore %r15
+    popq %r14                    # Restore %r14
+    popq %r13                    # Restore %r13
+    popq %r12                    # Restore %r12
+    popq %rbx                    # Restore %rbx
+    addq $32, %rsp               # Restore stack
+    popq %rbp                    # Restore base pointer
+    ret                          # Return from subroutine
 
 putChar:
+
+
     pushq %rsi                   # Save %rsi
     movq out_buffer_pos, %rsi    # Load current output buffer position
     leaq out_buffer, %rdx        # Load effective address of out_buffer
@@ -334,6 +460,16 @@ getOutPos:
     ret
 
 setOutPos:
+    pushq %rbp
+    movq %rsp, %rbp
+    subq $32, %rsp
+
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+
     cmpq $0, %rdi                 # Jämför utdatavärdet med 0
     jle _outpos_lower             # Om mindre än 0, hoppa
 
@@ -353,6 +489,14 @@ _outpos_higher:
     jmp _set_out_pos_end
 
 _set_out_pos_end:
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %rbx
+
+    addq $32, %rsp
+    popq %rbp
     ret
 
 

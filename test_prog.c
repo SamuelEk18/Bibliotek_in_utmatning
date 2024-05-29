@@ -20,7 +20,7 @@ int main(){
     outImage();
     inImage();
 
-    // Loop som hämtar 5 tal från inmatningsbuffert, 
+    // Loop som hämtar 5 tal från inmatningsbuffert,
     // samt placerar uträkning med dessa tal att presentera i utmatningsbufferten.
     // Talen summeras också i variabeln sum.
     for (count=5; count>0; count-- ){
