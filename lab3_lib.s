@@ -11,7 +11,8 @@ out_buffer:
 out_buffer_pos:
     .quad 0
 
-.global inImage,getInt,getText,getChar,getInPos,setInPos,outImage,putInt,putText,putChar,getOutPos,setOutPos
+.global inImage, getInt, getText, getChar, getInPos, setInPos, outImage, putInt, putText, putChar, getOutPos, setOutPos
+
 .text
 
 inImage:
@@ -34,15 +35,19 @@ inImage:
 
 getInt:
     xorq %rax, %rax                # Clear %rax for the result
-    movq in_buffer_pos(%rip), %rsi # Load current input buffer position
-    leaq in_buffer(%rip), %rdi     # Load effective address of in_buffer
+    movq in_buffer_pos, %rsi # Load current input buffer position
+    leaq in_buffer, %rdi     # Load effective address of in_buffer
     xorq %rdx, %rdx                # Clear %rdx for the sign flag (0 = positive, 1 = negative)
+    cmpq $63, %rsi
+    je _refill_buffer # pointer at end of buffer
 
 _check_whitespace:
-    cmpq $63, %rsi
-    je _refill_buffer              # If buffer position is at end, refill
     cmpb $' ', (%rdi, %rsi)        # Check for whitespace
     jne _check_sign
+
+    cmpq $63, %rsi
+    je _end_int              # If buffer position is at end, refill
+
     incq %rsi                      # Move to next character
     jmp _check_whitespace
 
@@ -50,7 +55,8 @@ _check_sign:
     cmpb $'-', (%rdi, %rsi)        # Check for negative sign
     je _set_negative
     cmpb $'+', (%rdi, %rsi)        # Check for positive sign
-    je _check_digit
+    cmpq $63, %rsi
+    incq %rsi
     jmp _check_digit
 
 _set_negative:
@@ -75,7 +81,7 @@ _check_digit:
 
 _refill_buffer:
     call inImage                   # Refill input buffer
-    movq in_buffer_pos(%rip), %rsi # Reload input buffer position
+    movq in_buffer_pos , %rsi # Reload input buffer position
     jmp _check_whitespace          # Continue checking for digits
 
 _end_int:
@@ -84,14 +90,12 @@ _end_int:
     negq %rax                      # Apply negative sign
 
 _return_int:
-    movq %rsi, in_buffer_pos(%rip) # Update input buffer position
+    movq %rsi, in_buffer_pos  # Update input buffer position
     ret
 
-
-
 getText:
-    movq in_buffer_pos(%rip), %rdx    # Load current input buffer position into %rdx
-    leaq in_buffer(%rip), %rcx        # Load effective address of in_buffer into %rcx
+    movq in_buffer_pos , %rdx    # Load current input buffer position into %rdx
+    leaq in_buffer , %rcx        # Load effective address of in_buffer into %rcx
     xorq %rax, %rax                   # Clear %rax (used as character count)
 
     cmpq $63, %rdx                    # Compare buffer position with buffer limit
@@ -100,7 +104,7 @@ getText:
 
 _get_next_text:
     call inImage                      # Call function to get next input buffer
-    movq in_buffer_pos(%rip), %rdx    # Reload input buffer position
+    movq in_buffer_pos , %rdx    # Reload input buffer position
 
 _getText_loop:
     cmpq %rsi, %rax                   # Compare character count with desired length
@@ -121,7 +125,7 @@ _getText_loop:
 
 _return_GetText:
     movb $0, (%rdi, %rax)             # NULL-terminate the destination string
-    movq %rdx, in_buffer_pos(%rip)    # Save updated input buffer position
+    movq %rdx, in_buffer_pos     # Save updated input buffer position
     ret
 
 getChar:
@@ -145,7 +149,7 @@ _result_get_char:
     ret
 
 getInPos:
-    movq in_buffer_pos(%rip), %rax
+    movq in_buffer_pos , %rax
     ret
 
 setInPos:
@@ -188,8 +192,8 @@ putInt:
     movq %rsp, %rbp                # Set base pointer
     subq $16, %rsp                 # Allocate space on stack for local variables
 
-    movq out_buffer_pos(%rip), %r9 # Load current output buffer position
-    leaq out_buffer(%rip), %r8     # Load effective address of out_buffer
+    movq out_buffer_pos , %r9 # Load current output buffer position
+    leaq out_buffer , %r8     # Load effective address of out_buffer
     movq $10, %rsi                 # Set divisor to 10
     xorq %rdx, %rdx                # Clear %rdx for division
     xorq %rcx, %rcx                # Clear %rcx for digit count
@@ -253,7 +257,7 @@ _put_int_handle_overflow:
     jmp _put_int_output_sign       # Retry outputting sign/digits
 
 _put_int_done:
-    movq %r9, out_buffer_pos(%rip) # Update output buffer position
+    movq %r9, out_buffer_pos  # Update output buffer position
     addq $16, %rsp                 # Restore stack
     popq %rbp                      # Restore base pointer
     ret
