@@ -33,61 +33,61 @@ inImage:
     ret          # Return from the subroutine
 
 getInt:
-    movq in_buffer_pos(%rip), %rsi
-    leaq in_buffer(%rip), %rdi
+    xorq %rax, %rax                # Clear %rax for the result
+    movq in_buffer_pos(%rip), %rsi # Load current input buffer position
+    leaq in_buffer(%rip), %rdi     # Load effective address of in_buffer
+    xorq %rdx, %rdx                # Clear %rdx for the sign flag (0 = positive, 1 = negative)
+
+_check_whitespace:
     cmpq $63, %rsi
-    je _next_int
-    jmp _white_space
-
-_next_int:
-    call inImage
-    movq in_buffer_pos, %rsi
-
-_white_space:
-    cmpb $' ',(%rdi, %rsi)            # Kolla om mellanslag
+    je _refill_buffer              # If buffer position is at end, refill
+    cmpb $' ', (%rdi, %rsi)        # Check for whitespace
     jne _check_sign
-    cmpq $63, %rsi
-    je _end_int
-    incq %rsi
-    jmp _white_space
+    incq %rsi                      # Move to next character
+    jmp _check_whitespace
 
 _check_sign:
-    cmpb $'-', (%rdi, %rsi) # Kolla om negativt tecken
+    cmpb $'-', (%rdi, %rsi)        # Check for negative sign
     je _set_negative
-    cmpb $'+', (%rdi, %rsi)           # Kolla om positivt tecken
-    je _end_int
-    jmp _check_num
+    cmpb $'+', (%rdi, %rsi)        # Check for positive sign
+    je _check_digit
+    jmp _check_digit
 
 _set_negative:
-    movq $1, %rdx            # Sätt teckenflaggan till negativt
-    cmpq $63, %rsi
-    je _end_int
-    incq %rsi
-    jmp _check_num
+    movq $1, %rdx                  # Set sign flag to negative
+    incq %rsi                      # Move to next character
+    jmp _check_digit
 
-_check_num:
-    movb (%rdi,%rsi), %cl         # Ladda aktuell karaktär
-    cmpb $'0', %cl            # Kolla om det är en siffra
-    jl _end_int
+_check_digit:
+    cmpq $63, %rsi
+    je _refill_buffer              # If buffer position is at end, refill
+    movb (%rdi, %rsi), %cl         # Load current character
+    cmpb $'0', %cl                 # Check if it is a digit
+    jb _end_int                    # If less than '0', end
     cmpb $'9', %cl
-    jg _end_int
+    ja _end_int                    # If greater than '9', end
 
-    subq $'0', %rcx            # Konvertera ASCII till numeriskt värde
-    imulq $10, %rax            # Multiplicera aktuellt resultat med 10
-    addq %rcx, %rax             # Lägg till ny siffra till resultatet
-    cmpq $63, %rsi
-    je _end_int
-    incq %rsi                   # Flytta till nästa
-    jmp _check_num
+    subb $'0', %cl                 # Convert ASCII to numeric value
+    imulq $10, %rax                # Multiply result by 10
+    addq %rcx, %rax                # Add the digit to the result
+    incq %rsi                      # Move to next character
+    jmp _check_digit
+
+_refill_buffer:
+    call inImage                   # Refill input buffer
+    movq in_buffer_pos(%rip), %rsi # Reload input buffer position
+    jmp _check_whitespace          # Continue checking for digits
 
 _end_int:
-    cmpq $1, %rdx              # Kolla om talet är negativt
-    jne _get_int_return
-    negq %rax # Applicera negativt tecken om det behövs
+    cmpq $1, %rdx                  # Check if number is negative
+    jne _return_int
+    negq %rax                      # Apply negative sign
 
-_get_int_return:
-    movq %rsi, in_buffer_pos
+_return_int:
+    movq %rsi, in_buffer_pos(%rip) # Update input buffer position
     ret
+
+
 
 getText:
     movq in_buffer_pos(%rip), %rdx    # Load current input buffer position into %rdx
@@ -184,77 +184,79 @@ outImage:
     ret
 
 putInt:
-    pushq %rbp                 # Save base pointer
-    movq %rsp, %rbp            # Set base pointer
-    subq $16, %rsp             # Allocate space on stack for local variables
+    pushq %rbp                     # Save base pointer
+    movq %rsp, %rbp                # Set base pointer
+    subq $16, %rsp                 # Allocate space on stack for local variables
 
-    movq out_buffer_pos, %r9
-    leaq out_buffer(%rip), %r8 # Load effective address of out_buffer
-    movq $10, %rsi             # Set divisor to 10
-    xorq %rdx, %rdx            # Clear %rdx for division
-    xorq %rcx, %rcx            # Clear %rcx for digit count
-    xorq %rbp, %rbp            # Clear %rbp, used for negative flag
+    movq out_buffer_pos(%rip), %r9 # Load current output buffer position
+    leaq out_buffer(%rip), %r8     # Load effective address of out_buffer
+    movq $10, %rsi                 # Set divisor to 10
+    xorq %rdx, %rdx                # Clear %rdx for division
+    xorq %rcx, %rcx                # Clear %rcx for digit count
+    xorq %rbp, %rbp                # Clear %rbp, used for negative flag
 
-    cmpq $0, %rdi
-    jl _put_int_negativ
+    cmpq $0, %rdi               # Check if the input is zero
+    je _put_zero                   # If zero, handle separately
+    jl _put_int_negative
 
     movq %rdi, %rax
-    jmp _put_int_division
+    jmp _put_int_divide
 
-_put_int_negativ:
-    negq %rdi                  # Negate %rdi
-    movq %rdi, %rax            # Move negated value to %rax
-    movq $1, %rbp              # Set negative flag
+_put_zero:
+    cmpq $63, %r9                  # Check buffer position for overflow
+    jge _put_int_handle_overflow
+    movb $'0', (%r8, %r9)          # Place '0' in buffer
+    incq %r9                       # Increment buffer position
+    jmp _put_int_done
 
-_put_int_division:
-    idivq %rsi                 # Divide %rax by %rsi, quotient in %rax, remainder in %rdx
-    pushq %rdx                 # Push remainder (digit) onto stack
-    incq %rcx                  # Increment digit count
-    cmpq $0, %rax
-    je _check_sign_put_int
+_put_int_negative:
+    negq %rdi                      # Negate %rdi
+    movq %rdi, %rax                # Move negated value to %rax
+    movq $1, %rbp                  # Set negative flag
 
-    xorq %rdx, %rdx            # Clear %rdx for next division
-    jmp _put_int_division
+_put_int_divide:
+    idivq %rsi                     # Divide %rax by %rsi, quotient in %rax, remainder in %rdx
+    pushq %rdx                     # Push remainder (digit) onto stack
+    incq %rcx
+    cmpq $0, %rax               # Check if quotient is zero
+    je _put_int_output_sign
 
-_check_sign_put_int:
-    cmpq $1, %rbp
-    jne _put_int_lenght
+    xorq %rdx, %rdx
+    jmp _put_int_divide            # If not, continue dividing
 
-    addq $1, %r9               # Adjust for negative sign
-    cmpq $62, %r9
-    jg _put_int_loop
-    movq $'-', (%r8, %r9)      # Insert negative sign
-    incq %r9                   # Increment position
+_put_int_output_sign:
+    cmpq $1, %rbp                  # Check if number was negative
+    jne _put_int_output_digits
 
-_put_int_lenght:
-    addq %rcx, %r9             # Adjust for digit count
-    cmpq $62, %r9
-    jg _put_int_loop
+    cmpq $62, %r9                  # Check buffer position for overflow
+    jge _put_int_handle_overflow
+    movb $'-', (%r8, %r9)          # Insert negative sign
+    incq %r9                       # Increment buffer position
 
-_put_int_handle_str:
-    cmpq $0, %rcx
-    je _return_put_int
+_put_int_output_digits:
+    cmpq $0, %rcx                  # Check if there are digits to output
+    je _put_int_done
 
-    popq %rdx                  # Pop digit from stack
-    addq $'0', %rdx            # Convert to ASCII
-    movb %dl, (%r8, %r9)       # Store ASCII digit in buffer
-    decq %rcx                  # Decrement digit count
-    incq %r9                   # Increment buffer position
-    jmp _put_int_handle_str
+    popq %rdx                      # Pop digit from stack
+    addb $'0', %dl                 # Convert to ASCII
+    cmpq $63, %r9                  # Check buffer position for overflow
+    jge _put_int_handle_overflow
 
-_put_int_loop:
-    call outImage              # Handle full buffer (assuming this function resets out_buffer and out_buffer_pos)
-    movq out_buffer_pos, %r9   # Reload updated out_buffer_pos
+    movb %dl, (%r8, %r9)           # Store ASCII digit in buffer
+    incq %r9                       # Increment buffer position
+    decq %rcx                      # Decrement digit count
+    jmp _put_int_output_digits
 
-    jmp _put_int_handle_str
+_put_int_handle_overflow:
+    call outImage                  # Handle buffer overflow (print and reset)
+    xorq %r9, %r9                  # Reset buffer position to zero
+    jmp _put_int_output_sign       # Retry outputting sign/digits
 
-_return_put_int:
-    movb $0, (%r8, %r9)        # Null-terminate the string
-    movq %r9, out_buffer_pos   # Update out_buffer_pos
-    addq $16, %rsp             # Restore stack
-    popq %rbp                  # Restore base pointer
+_put_int_done:
+    movq %r9, out_buffer_pos(%rip) # Update output buffer position
+    addq $16, %rsp                 # Restore stack
+    popq %rbp                      # Restore base pointer
     ret
-
 
 putText:
     movq out_buffer_pos, %rsi
@@ -292,6 +294,7 @@ _put_text_loop:
 _return_put_text:
     movq %rsi, out_buffer_pos
     ret
+
 
 putChar:
     pushq %rsi                   # Save %rsi
