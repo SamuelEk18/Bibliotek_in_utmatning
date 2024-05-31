@@ -28,8 +28,8 @@ inImage:
     movq stdin, %rdx         # ladda in stdin
     call fgets               # läs input med fgets
 
-    leaq in_buffer_pos, %rdi # ge address av buffern
-    movq $0, (%rdi)
+    leaq in_buffer_pos, %rdi # Calculate effective address for in_buffer_pos
+    movq $0, (%rdi)          # Store 0 at the calculated address
 
     popq %rdx
     popq %rsi
@@ -47,84 +47,85 @@ getInt:
     pushq %r14
     pushq %r15
 
-    xorq %rax, %rax  # Clear %rax (accumulator for the integer value)
-    xorq %rdx, %rdx  # Clear %rdx (flag for negative number)
-    xorq %rcx, %rcx  # Clear %rcx (character register)
+    xorq %rax, %rax
+    xorq %rdx, %rdx
+    xorq %rcx, %rcx
 
-    movq in_buffer_pos, %rsi  # Load the current position for input
-    leaq in_buffer, %rdi      # Load the effective address of in_buffer
-    cmpq $63, %rsi            # Check if we are at the end of the buffer
-    je _refill_buffer         # If at the end, refill the buffer
+    movq in_buffer_pos, %rsi # Ladda aktuell position för indata
+    leaq in_buffer, %rdi     # Ladda effektiv adress för in_buffer
+    xorq %rdx, %rdx                # Rensa %rdx håller koll på minus
+    cmpq $63, %rsi # kolla om vi är i slutet
+    je _refill_buffer # pekare på slutet av bufferten
 
 _check_whitespace:
-    movb (%rdi, %rsi), %cl    # Load the current character
-    cmpb $' ', %cl            # Check if it is a space
-    je _skip_whitespace
-    cmpb $'\t', %cl           # Check if it is a tab
-    je _skip_whitespace
-    cmpb $'\n', %cl           # Check if it is a newline
-    je _skip_whitespace
-    jmp _check_sign
+    movb (%rdi, %rsi), %cl      # Load the character at the current position
+    cmpb $0, %cl                 # Check for end of string
+    je _refill_buffer            # If end of string, refill buffer
 
-_skip_whitespace:
-    incq %rsi                 # Move to the next character
-    cmpq $63, %rsi            # Check if the buffer position is at the end
-    je _refill_buffer         # If buffer position is at the end, refill the buffer
-    jmp _check_whitespace
+    cmpb $' ', %cl               # Check for whitespace
+    je _next_character           # If whitespace, go to next character
 
-_check_sign:
-    cmpb $'-', (%rdi, %rsi)   # Check if the character is a negative sign
-    je _set_negative
-    cmpb $'+', (%rdi, %rsi)   # Check if the character is a positive sign
-    je _skip_sign
+    cmpb $'\t', %cl              # Check for tab
+    je _next_character           # If tab, go to next character
 
-_check_digit:
-    cmpb $'0', (%rdi, %rsi)   # Check if the character is a digit
-    jb _invalid_char
-    cmpb $'9', (%rdi, %rsi)   # Check if the character is a digit
-    ja _invalid_char
+    cmpb $'\n', %cl              # Check for newline
+    je _refill_buffer            # If newline, refill buffer
 
-    subb $'0', (%rdi, %rsi)   # Convert ASCII character to integer
-    imulq $10, %rax           # Multiply current integer by 10
-    addq %rcx, %rax           # Add the new digit
-    incq %rsi                 # Move to the next character
-    cmpq $63, %rsi            # Check if we are at the end of the buffer
-    je _refill_buffer         # If at the end, refill the buffer
-    jmp _check_digit
+    cmpb $'-', %cl               # Check for negative sign
+    je _set_negative             # If negative sign, set negative flag
 
-_invalid_char:
-    cmpq $0, %rax # Check if we have collected any digits
-    je _check_whitespace      # If not, go back to check for whitespace
+    cmpb $'+', %cl               # Check for positive sign
+    je _check_digit              # If positive sign, check for digits
 
-_refill_buffer:
-    call inImage              # Refill the buffer
-    movq in_buffer_pos, %rsi  # Reload the buffer position
-    jmp _check_whitespace     # Continue checking for whitespace
+    jmp _check_digit             # If none of the above, check for digits
+
+_next_character:
+    incq %rsi                    # Move to next character
+    jmp _check_whitespace        # Continue checking whitespace
 
 _set_negative:
-    movq $1, %rdx             # Set flag for negative number
-    incq %rsi                 # Move to the next character
-    jmp _check_digit          # Continue checking for digits
+    movq $1, %rdx                  # Sätt teckenflaggan till negativ
+    incq %rsi                      # Gå till nästa tecken
+    jmp _check_digit
 
-_skip_sign:
-    incq %rsi                 # Move to the next character
-    jmp _check_digit          # Continue checking for digits
+_check_digit:
+    cmpq $63, %rsi
+    je _refill_buffer              # Om buffertpositionen är i slutet, fyll på
+
+    movb (%rdi, %rsi), %cl         # Ladda aktuellt tecken
+    # kolla om de ligger mellan 0-9
+    cmpb $'0', %cl
+    jb _end_int
+    cmpb $'9', %cl
+    ja _end_int
+
+    subb $'0', %cl # gör numeriskt
+    imulq $10, %rax # Multiplicera ut med 10, eftersom vi ska ladda in talet åt höger
+    addq %rcx, %rax # siffran till ut
+    incq %rsi # Gå till nästa tecken
+    jmp _check_digit
+
+_refill_buffer:
+    call inImage # fyll på buffern
+    movq in_buffer_pos , %rsi # ladda buffer positionen
+    jmp _check_whitespace # fortsätt
 
 _end_int:
-    testq %rdx, %rdx          # Check if the number is negative
-    jz _return_int            # If not, return the integer
-    negq %rax                 # Negate the integer
+    cmpq $1, %rdx # kolla om negativt
+    jne _return_int
+    negq %rax # sätt negativit
 
 _return_int:
-    movq %rsi, in_buffer_pos  # Update the buffer position
-    popq %r15                 # Restore registers
-    popq %r14
-    popq %r13
-    popq %r12
-    popq %rbx
-    movq %rbp, %rsp           # Restore stack pointer
-    popq %rbp                 # Restore base pointer
-    ret                       # Return from subroutine
+    movq %rsi, in_buffer_pos  # sätt positonen till där vi nu är
+
+    popq %r15                   # Restore %r15
+    popq %r14                   # Restore %r14
+    popq %r13                   # Restore %r13
+    popq %r12                   # Restore %r12
+    popq %rbx                   # Restore %rbx
+    movq %rbp, %rsp             # Restore the stack pointer
+    popq %rbp                   # Restore the base pointer
+    ret                         # Return from subroutine
 
 getText:
     pushq %rbp
@@ -156,18 +157,9 @@ _getText_loop:
     cmpb $0, %r8b # är slut?
     je _return_GetText
 
-    # Check for whitespace characters and skip them
-    cmpb $' ', %r8b
-    je _skip_getText_whitespace
-    cmpb $'\t', %r8b
-    je _skip_getText_whitespace
-    cmpb $'\n', %r8b
-    je _skip_getText_whitespace
-
     movb %r8b, (%rdi, %rax) # lägg byte på out
     incq %rax
 
-_skip_getText_whitespace:
     cmpq $63, %rdx # kolla om behöver ny data
     je _get_next_text
 
@@ -516,7 +508,3 @@ _set_out_pos_end:
     addq $16, %rsp
     popq %rbp
     ret
-
-
-
-
