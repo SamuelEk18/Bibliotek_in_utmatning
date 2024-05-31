@@ -85,8 +85,7 @@ _next_character:
 
 _set_negative:
     movq $1, %rdx                  # Sätt teckenflaggan till negativ
-    incq %rsi                      # Gå till nästa tecken
-    jmp _check_digit
+    incq %rsi
 
 _check_digit:
     cmpq $63, %rsi
