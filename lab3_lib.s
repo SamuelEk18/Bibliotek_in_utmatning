@@ -24,12 +24,12 @@ inImage:
     pushq %rdx
 
     movq $in_buffer, %rdi    # ladda in addressen till buffern
-    movq $64, %rsi           # max inläsning
-    movq stdin, %rdx         # ladda in stdin
-    call fgets               # läs input med fgets
+    movq $64, %rsi # max inläsning
+    movq stdin, %rdx # ladda in stdin
+    call fgets # läs input med fgets
 
-    leaq in_buffer_pos, %rdi # Calculate effective address for in_buffer_pos
-    movq $0, (%rdi)          # Store 0 at the calculated address
+    leaq in_buffer_pos, %rdi # ladda in positionen
+    movq $0, (%rdi) # lägg 0 på den addressen
 
     popq %rdx
     popq %rsi
@@ -39,96 +39,98 @@ inImage:
     ret
 
 getInt:
-    pushq %rbp
-    movq %rsp, %rbp
-    subq $32, %rsp
+    pushq $0
+
+    movq $in_buffer, %rdi # ladda in addressen
+    movq $in_buffer_pos, %rsi # ladda in positonen
+    movq (%rsi), %rbx # ta in värdet som pekas på
+    movq $0, %rax
+    movq $0, %r8
+
+    cmpq $62,%rbx # kolla om går ladda in mer
+    jge  _buffer_refill
+
+    movzbq (%rdi,%rbx,1), %rdx # läs byte från positionen och gör till 64
+    cmpq $10, %rdx # kolla om mellan 0-9
+    jle _buffer_refill
+
+_loop_get_int:
+    movzbq (%rdi,%rbx,1), %rdx # läs byte från positionen och gör till 64
+    cmpq $45, %rdx # kolla om negativt
+    je _negative
+
+    cmpq $43, %rdx # kolla om positivt
+    je _positive
+
+    cmpq $32, %rdx # kolla om " "
+    je _skip
+
+    cmpq $48, %rdx # kolla < 0
+    jl _return_get_int
+
+    cmpq $57, %rdx # kolla > 9
+    jg _return_get_int
+
+    sub $'0', %rdx # ascii
+    cmpq $0, %rax # kolla om 0
+    jne _relevant_numbers
+
+    movq %rdx, %rax # ge till ut
+    incq %rbx
+    jmp _loop_get_int
+
+_negative:
+    movq $1, %r8 # flagga negativ
+    incq %rbx
+    jmp _loop_get_int
+
+_set_to_negative:
+    negq %rax # sätt ut som negativ
+    movq $0, %r8
+    jmp _return_get_int
+
+_positive:
+    incq %rbx
+    jmp _loop_get_int
+
+_skip:
+    cmpq $0, %rax # koll om slut
+    jne _return_get_int
+
+    incq %rbx
+    jmp _loop_get_int
+
+_relevant_numbers:
+    imulq $10, %rax
+    addq %rdx, %rax # lägg ihop
+    incq %rbx # gå till vänster
+    jmp _loop_get_int
+
+_buffer_refill:
+    pushq %rax
+    pushq %rsi
+    pushq %rdi
     pushq %rbx
-    pushq %r12
-    pushq %r13
-    pushq %r14
-    pushq %r15
-    xorq %r15,%r15
 
-    xorq %rax, %rax    # Clear RAX to store the integer result
-    xorq %rdx, %rdx    # Clear RDX to store the negative flag
-    movq $0, %rcx   # Clear RDX to store the negative flag
-    xorq %rcx, %rcx    # Clear RDX to store the negative flag
+    call inImage
 
-    movq in_buffer_pos, %rsi  # Load current position in buffer
-    leaq in_buffer, %rdi      # Load effective address of the buffer
-
-_check_whitespace:
-    cmpq $64, %rsi             # Check if buffer position is at the end
-    je _refill_buffer          # Refill buffer if position is at end
-
-    movb (%rdi, %rsi), %cl     # Load character at current position
-    cmpb $0, %cl
-    je _refill_buffer          # Refill buffer if end of string
-
-    cmpb $' ', %cl
-    je _next_character         # Skip whitespace
-    cmpb $'\t', %cl
-    je _next_character         # Skip tab
-    cmpb $'\n', %cl
-    je _next_character         # Skip newline
-    cmpb $'\r', %cl
-    je _next_character         # Skip carriage return
-
-    cmpb $'-', %cl
-    je _set_negative           # Handle negative sign
-    cmpb $'+', %cl
-    je _next_character         # Handle positive sign (just skip it)
-
-    jmp _check_digit           # Check for digit
-
-_next_character:
-    incq %rsi                  # Increment buffer position
-    jmp _check_whitespace      # Continue checking whitespace
-
-_set_negative:
-    movq $1, %rdx              # Set negative flag
-    incq %rsi                  # Increment buffer position
-    jmp _check_whitespace      # Continue checking whitespace
-
-_check_digit:
-    cmpq $64, %rsi             # Check if buffer position is at the end
-    je _refill_buffer          # Refill buffer if position is at end
-
-    movb (%rdi, %rsi), %cl     # Load character at current position
-    cmpb $'0', %cl
-    jb _end_int                # If character is less than '0', end int processing
-    cmpb $'9', %cl
-    ja _end_int                # If character is greater than '9', end int processing
-
-    subb $'0', %cl             # Convert ASCII to digit
-    imulq $10, %rax            # Multiply current result by 10
-    addq %rcx, %rax            # Add the digit
-    incq %rsi                  # Increment buffer position
-    jmp _check_digit           # Continue checking digits
-
-_refill_buffer:
-    call inImage               # Refill buffer
-    movq in_buffer_pos, %rsi   # Reload buffer position
-    jmp _check_whitespace      # Continue checking whitespace
-
-_end_int:
-    cmpq $1, %rdx              # Check if negative flag is set
-    jne _return_int
-    negq %rax                  # Negate result if negative
-
-_return_int:
-    movq %rsi, in_buffer_pos   # Save buffer position
-
-    popq %r15
-    popq %r14
-    popq %r13
-    popq %r12
     popq %rbx
-    addq $32, %rsp
-    popq %rbp
+    popq %rdi
+    popq %rsi
+    popq %rax
+
+    movq $0, %rbx # sätt positionen till 0
+    jmp _loop_get_int
+
+_return_get_int:
+    cmpq $1, %r8 # är den flaggad negativ?
+    je _set_to_negative
+
+    popq %rsi # ge tillbaka senaste
+    movq $in_buffer_pos, %rsi # sätt på buffernpositionen
+    movq %rbx, (%rsi) # ge värde till rbx
+    movq $in_buffer, %rdi # ge värde till buffern
     ret
-
-
 
 getText:
     pushq %rbp
