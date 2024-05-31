@@ -69,7 +69,7 @@ _check_whitespace:
     je _next_character           # If tab, go to next character
 
     cmpb $'\n', %cl              # Check for newline
-    je _refill_buffer            # If newline, refill buffer
+    je _next_character            # If newline, refill buffer
 
     cmpb $'-', %cl               # Check for negative sign
     je _set_negative             # If negative sign, set negative flag
